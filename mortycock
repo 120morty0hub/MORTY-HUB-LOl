@@ -1,0 +1,1538 @@
+-- MORTY HUB | Block Spin v2.1 - MAIN Tab
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+local silentAimEnabled = false
+local fovSize = 200
+
+local function isValidTarget(character)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	return humanoid and humanoid.Health > 0 and rootPart
+end
+
+local function getClosestTarget()
+	local bestTarget
+	local bestDistance
+	local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character and isValidTarget(player.Character) then
+			local targetPart = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
+			if targetPart then
+				local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+				if onScreen then
+					local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+					if distance <= fovSize and (not bestDistance or distance < bestDistance) then
+						bestDistance = distance
+						bestTarget = targetPart
+					end
+				end
+			end
+		end
+	end
+
+	return bestTarget
+end
+
+local highJumpEnabled = false
+local infiniteStaminaEnabled = false
+local invisibleEnabled = false
+local hideNameEnabled = false
+local enableSnapEnabled = false
+local snapDepth = 33
+local originalJumpPower = nil
+local originalDisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+local snapKey = Enum.KeyCode.Z
+
+local meleeAuraEnabled = false
+local autoAttackEnabled = false
+local bumpAuraEnabled = false
+local safeFriend = "--"
+local antiKillEnabled = false
+local antiRagdollEnabled = false
+local antiLockEnabled = false
+local autoPickupEnabled = false
+local autoMinigameEnabled = false
+local autoPickupRange = 25
+local spectateEnabled = false
+local spectateTarget = "--"
+local skipCrateSpinEnabled = false
+local fpsBoostEnabled = false
+local currentServerJobId = "N/A"
+local gunAmmoType = "Pistola"
+local gunAmmoTypes = {"Pistola", "Fusil De Asalto", "Escopeta", "Especial"}
+local gunAmmoPrices = {
+	Pistola = 720,
+	["Fusil De Asalto"] = 1600,
+	Escopeta = 1850,
+	Especial = 3600
+}
+
+local enableGunMods = false
+local weaponFireRate = 26
+local weaponAccuracy = 0
+local weaponRecoil = 0
+local weaponReloadTime = 10
+local weaponAutomatic = false
+local configFilePath = "MortyBlockSpinConfig.json"
+
+local espNameEnabled = false
+local espHealthEnabled = false
+local espDistanceEnabled = false
+local espBoxEnabled = false
+local espInventoryEnabled = false
+local hackerDetectionEnabled = false
+local droppedItemsEnabled = false
+
+local function serializeConfig()
+	local config = {
+		silentAimEnabled = silentAimEnabled,
+		fovSize = fovSize,
+		meleeAuraEnabled = meleeAuraEnabled,
+		autoAttackEnabled = autoAttackEnabled,
+		bumpAuraEnabled = bumpAuraEnabled,
+		safeFriend = safeFriend,
+		antiKillEnabled = antiKillEnabled,
+		antiRagdollEnabled = antiRagdollEnabled,
+		antiLockEnabled = antiLockEnabled,
+		highJumpEnabled = highJumpEnabled,
+		infiniteStaminaEnabled = infiniteStaminaEnabled,
+		invisibleEnabled = invisibleEnabled,
+		hideNameEnabled = hideNameEnabled,
+		enableSnapEnabled = enableSnapEnabled,
+		snapDepth = snapDepth,
+		enableGunMods = enableGunMods,
+		weaponFireRate = weaponFireRate,
+		weaponAccuracy = weaponAccuracy,
+		weaponRecoil = weaponRecoil,
+		weaponReloadTime = weaponReloadTime,
+		weaponAutomatic = weaponAutomatic,
+		espNameEnabled = espNameEnabled,
+		espHealthEnabled = espHealthEnabled,
+		espDistanceEnabled = espDistanceEnabled,
+		espBoxEnabled = espBoxEnabled,
+		espInventoryEnabled = espInventoryEnabled,
+		hackerDetectionEnabled = hackerDetectionEnabled,
+		droppedItemsEnabled = droppedItemsEnabled,
+		autoPickupEnabled = autoPickupEnabled,
+		autoMinigameEnabled = autoMinigameEnabled,
+		autoPickupRange = autoPickupRange,
+		spectateEnabled = spectateEnabled,
+		spectateTarget = spectateTarget,
+		skipCrateSpinEnabled = skipCrateSpinEnabled,
+		fpsBoostEnabled = fpsBoostEnabled,
+		gunAmmoType = gunAmmoType
+	}
+	
+	local json = "{"
+	local first = true
+	for key, value in pairs(config) do
+		if not first then json = json .. "," end
+		first = false
+		if type(value) == "string" then
+			json = json .. '"' .. key .. '":"' .. tostring(value):gsub('"', '\\"') .. '"'
+		else
+			json = json .. '"' .. key .. '":' .. tostring(value)
+		end
+	end
+	json = json .. "}"
+	return json
+end
+
+local function saveConfig()
+	local success = false
+	pcall(function()
+		if isfile and writefile then
+			writefile(configFilePath, serializeConfig())
+			success = true
+		end
+	end)
+	
+	-- Configuración guardada o error al guardar (notificación eliminada)
+	-- if needed, agregue feedback manual aquí
+end
+
+local function loadConfig()
+	local success = false
+	pcall(function()
+		if isfile and readfile then
+			if isfile(configFilePath) then
+				local json = readfile(configFilePath)
+				
+				if json:find('"silentAimEnabled":true') then silentAimEnabled = true end
+				if json:find('"silentAimEnabled":false') then silentAimEnabled = false end
+				
+				if json:find('"meleeAuraEnabled":true') then meleeAuraEnabled = true end
+				if json:find('"meleeAuraEnabled":false') then meleeAuraEnabled = false end
+				
+				if json:find('"autoAttackEnabled":true') then autoAttackEnabled = true end
+				if json:find('"autoAttackEnabled":false') then autoAttackEnabled = false end
+				
+				if json:find('"bumpAuraEnabled":true') then bumpAuraEnabled = true end
+				if json:find('"bumpAuraEnabled":false') then bumpAuraEnabled = false end
+				
+				if json:find('"antiKillEnabled":true') then antiKillEnabled = true end
+				if json:find('"antiKillEnabled":false') then antiKillEnabled = false end
+				
+				if json:find('"antiRagdollEnabled":true') then antiRagdollEnabled = true end
+				if json:find('"antiRagdollEnabled":false') then antiRagdollEnabled = false end
+				
+				if json:find('"antiLockEnabled":true') then antiLockEnabled = true end
+				if json:find('"antiLockEnabled":false') then antiLockEnabled = false end
+				
+				if json:find('"highJumpEnabled":true') then highJumpEnabled = true end
+				if json:find('"highJumpEnabled":false') then highJumpEnabled = false end
+				
+				if json:find('"infiniteStaminaEnabled":true') then infiniteStaminaEnabled = true end
+				if json:find('"infiniteStaminaEnabled":false') then infiniteStaminaEnabled = false end
+				
+				if json:find('"invisibleEnabled":true') then invisibleEnabled = true end
+				if json:find('"invisibleEnabled":false') then invisibleEnabled = false end
+				
+				if json:find('"hideNameEnabled":true') then hideNameEnabled = true end
+				if json:find('"hideNameEnabled":false') then hideNameEnabled = false end
+				
+				if json:find('"enableSnapEnabled":true') then enableSnapEnabled = true end
+				if json:find('"enableSnapEnabled":false') then enableSnapEnabled = false end
+				
+				if json:find('"enableGunMods":true') then enableGunMods = true end
+				if json:find('"enableGunMods":false') then enableGunMods = false end
+				
+				if json:find('"weaponAutomatic":true') then weaponAutomatic = true end
+				if json:find('"weaponAutomatic":false') then weaponAutomatic = false end
+				
+				if json:find('"espNameEnabled":true') then espNameEnabled = true end
+				if json:find('"espNameEnabled":false') then espNameEnabled = false end
+				
+				if json:find('"espHealthEnabled":true') then espHealthEnabled = true end
+				if json:find('"espHealthEnabled":false') then espHealthEnabled = false end
+				
+				if json:find('"espDistanceEnabled":true') then espDistanceEnabled = true end
+				if json:find('"espDistanceEnabled":false') then espDistanceEnabled = false end
+				
+				if json:find('"espBoxEnabled":true') then espBoxEnabled = true end
+				if json:find('"espBoxEnabled":false') then espBoxEnabled = false end
+				
+				if json:find('"espInventoryEnabled":true') then espInventoryEnabled = true end
+				if json:find('"espInventoryEnabled":false') then espInventoryEnabled = false end
+				
+				if json:find('"hackerDetectionEnabled":true') then hackerDetectionEnabled = true end
+				if json:find('"hackerDetectionEnabled":false') then hackerDetectionEnabled = false end
+				
+				if json:find('"droppedItemsEnabled":true') then droppedItemsEnabled = true end
+				if json:find('"droppedItemsEnabled":false') then droppedItemsEnabled = false end
+				
+				if json:find('"autoPickupEnabled":true') then autoPickupEnabled = true end
+				if json:find('"autoPickupEnabled":false') then autoPickupEnabled = false end
+				
+				if json:find('"autoMinigameEnabled":true') then autoMinigameEnabled = true end
+				if json:find('"autoMinigameEnabled":false') then autoMinigameEnabled = false end
+				
+				if json:find('"spectateEnabled":true') then spectateEnabled = true end
+				if json:find('"spectateEnabled":false') then spectateEnabled = false end
+				
+				if json:find('"skipCrateSpinEnabled":true') then skipCrateSpinEnabled = true end
+				if json:find('"skipCrateSpinEnabled":false') then skipCrateSpinEnabled = false end
+				
+				if json:find('"fpsBoostEnabled":true') then fpsBoostEnabled = true end
+				if json:find('"fpsBoostEnabled":false') then fpsBoostEnabled = false end
+				
+				local fovMatch = json:match('"fovSize":([0-9]+)')
+				if fovMatch then fovSize = tonumber(fovMatch) end
+				
+				local snapDepthMatch = json:match('"snapDepth":([0-9]+)')
+				if snapDepthMatch then snapDepth = tonumber(snapDepthMatch) end
+				
+				local fireRateMatch = json:match('"weaponFireRate":([0-9]+)')
+				if fireRateMatch then weaponFireRate = tonumber(fireRateMatch) end
+				
+				local accuracyMatch = json:match('"weaponAccuracy":([0-9]+)')
+				if accuracyMatch then weaponAccuracy = tonumber(accuracyMatch) end
+				
+				local recoilMatch = json:match('"weaponRecoil":([0-9]+)')
+				if recoilMatch then weaponRecoil = tonumber(recoilMatch) end
+				
+				local reloadMatch = json:match('"weaponReloadTime":([0-9]+)')
+				if reloadMatch then weaponReloadTime = tonumber(reloadMatch) end
+				
+				local pickupRangeMatch = json:match('"autoPickupRange":([0-9]+)')
+				if pickupRangeMatch then autoPickupRange = tonumber(pickupRangeMatch) end
+				
+				success = true
+			end
+		end
+	end)
+	
+	-- Configuración cargada o error al cargar (notificación eliminada)
+	-- if needed, agregue feedback manual aquí
+end
+
+local function deleteConfig()
+	local success = false
+	pcall(function()
+		if isfile and delfile then
+			if isfile(configFilePath) then
+				delfile(configFilePath)
+				success = true
+			end
+		end
+	end)
+	
+	-- Configuración eliminada o error al eliminar (notificación eliminada)
+	-- if needed, agregue feedback manual aquí
+end
+
+local function getLocalCharacter()
+	return LocalPlayer and LocalPlayer.Character
+end
+
+local function isPickupCandidate(item)
+	if item:IsA("Tool") and item.Parent and not item.Parent:IsDescendantOf(Players) then
+		return true
+	end
+	if item:IsA("BasePart") and item.Name:lower():find("pickup") then
+		return true
+	end
+	return false
+end
+
+local function findClosestPickup(character)
+	local root = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+	if not root then
+		return nil
+	end
+
+	local bestTarget
+	local bestDistance = autoPickupRange
+	for _, item in ipairs(workspace:GetDescendants()) do
+		if isPickupCandidate(item) then
+			local handle = item:IsA("BasePart") and item or item:FindFirstChild("Handle") or item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
+			if handle and handle.Parent then
+				local distance = (root.Position - handle.Position).Magnitude
+				if distance < bestDistance then
+					bestDistance = distance
+					bestTarget = handle
+				end
+			end
+		end
+	end
+	return bestTarget
+end
+
+local function doAutoPickup()
+	if not autoPickupEnabled then
+		return
+	end
+
+	local character = getLocalCharacter()
+	if not character then
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local target = findClosestPickup(character)
+	if target and humanoid and character.PrimaryPart then
+		if (character.PrimaryPart.Position - target.Position).Magnitude > 4 then
+			humanoid:MoveTo(target.Position)
+		else
+			character:SetPrimaryPartCFrame(CFrame.new(target.Position + Vector3.new(0, 3, 0)))
+		end
+	end
+end
+
+local function shouldAutoMinigameObject(obj)
+	local name = obj.Name:lower()
+	return name:find("atm") or name:find("fishing") or name:find("fish")
+end
+
+local function doAutoMinigame()
+	if not autoMinigameEnabled then
+		return
+	end
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("ProximityPrompt") and obj.Enabled and obj.Parent and shouldAutoMinigameObject(obj.Parent) then
+			pcall(function()
+				obj:InputHoldBegin()
+				wait(0.2)
+				obj:InputHoldEnd()
+			end)
+		end
+
+		if obj:IsA("ClickDetector") and obj.Parent and shouldAutoMinigameObject(obj.Parent) then
+			pcall(function()
+				obj:FireClick(LocalPlayer)
+			end)
+		end
+	end
+end
+
+local function getSpectateOptions()
+	local options = {"--"}
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			table.insert(options, player.Name)
+		end
+	end
+	return options
+end
+
+local function getPlayerByName(name)
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player.Name == name then
+			return player
+		end
+	end
+	return nil
+end
+
+local function restoreCamera()
+	if LocalPlayer and LocalPlayer.Character then
+		local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			Camera.CameraSubject = humanoid
+			Camera.CameraType = Enum.CameraType.Custom
+		end
+	end
+end
+
+local function spectatePlayer()
+	if not spectateEnabled then
+		return
+	end
+
+	local target = getPlayerByName(spectateTarget)
+	if target and target.Character and isValidTarget(target.Character) then
+		local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			Camera.CameraSubject = humanoid
+			Camera.CameraType = Enum.CameraType.Custom
+			return
+		end
+	end
+
+	restoreCamera()
+end
+
+local function getBankBalance()
+	local bankValue = 0
+	if LocalPlayer:FindFirstChild("leaderstats") then
+		local bankStat = LocalPlayer.leaderstats:FindFirstChild("Bank Balance") or LocalPlayer.leaderstats:FindFirstChild("BankBalance") or LocalPlayer.leaderstats:FindFirstChild("Bank")
+		if bankStat and bankStat:IsA("NumberValue") then
+			bankValue = bankStat.Value
+		end
+	end
+	return bankValue
+end
+
+local function getHandBalance()
+	local handValue = 0
+	if LocalPlayer:FindFirstChild("leaderstats") then
+		local handStat = LocalPlayer.leaderstats:FindFirstChild("Hand Balance") or LocalPlayer.leaderstats:FindFirstChild("HandBalance") or LocalPlayer.leaderstats:FindFirstChild("Hand")
+		if handStat and handStat:IsA("NumberValue") then
+			handValue = handStat.Value
+		end
+	end
+	return handValue
+end
+
+local function getServerJobId()
+	local jobId = game.JobId
+	if jobId and jobId ~= "" then
+		currentServerJobId = jobId
+		return jobId
+	end
+	return "N/A"
+end
+
+local function doSkipCrateSpin()
+	if not skipCrateSpinEnabled then
+		return
+	end
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("ProximityPrompt") then
+			local text = (obj.ObjectText or ""):lower() .. " " .. (obj.ActionText or ""):lower()
+			if text:find("spin") or text:find("crate") or text:find("abre") or text:find("open") then
+				pcall(function()
+					obj:InputHoldBegin()
+					wait(0.1)
+					obj:InputHoldEnd()
+				end)
+				break
+			end
+		end
+	end
+end
+
+local function applyFPSBoost()
+	if not fpsBoostEnabled then
+		return
+	end
+
+	for _, part in ipairs(workspace:GetDescendants()) do
+		if part:IsA("BasePart") then
+			if part:FindFirstChild("SurfaceGui") then
+				for _, gui in ipairs(part:FindFirstChild("SurfaceGui"):GetChildren()) do
+					if gui:IsA("ParticleEmitter") or gui:IsA("Attachment") then
+						pcall(function()
+							gui:Destroy()
+						end)
+					end
+				end
+			end
+		end
+
+		if part:IsA("ParticleEmitter") then
+			pcall(function()
+				part.Enabled = false
+			end)
+		end
+	end
+
+	local lighting = game:GetService("Lighting")
+	if lighting:FindFirstChild("Atmosphere") then
+		pcall(function()
+			lighting.Atmosphere.Density = 0
+		end)
+	end
+
+	pcall(function()
+		lighting.GlobalShadows = false
+	end)
+end
+
+local function restoreFPSSettings()
+	local lighting = game:GetService("Lighting")
+	pcall(function()
+		lighting.GlobalShadows = true
+	end)
+end
+
+local function getAmmoNameFilters(selectedType)
+	local lower = selectedType:lower()
+	if lower:find("pistola") or lower:find("pistol") then
+		return {"pistola", "pistol"}
+	elseif lower:find("fusil") or lower:find("assault") or lower:find("rifle") then
+		return {"fusil", "assault", "rifle"}
+	elseif lower:find("escopeta") or lower:find("shotgun") then
+		return {"escopeta", "shotgun"}
+	elseif lower:find("especial") or lower:find("special") then
+		return {"especial", "special", "unique"}
+	end
+	return {lower}
+end
+
+local function isNearGunStore(character)
+	local root = character and (character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart)
+	if not root then
+		return false
+	end
+
+	for _, part in ipairs(workspace:GetDescendants()) do
+		if part:IsA("BasePart") then
+			local text = part.Name:lower()
+			if text:find("gun") or text:find("weapon") or text:find("ammo") or text:find("shop") then
+				if (root.Position - part.Position).Magnitude <= 18 then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+local function matchesAmmoBuyObject(text, filters)
+	text = text:lower()
+	for _, filter in ipairs(filters) do
+		if text:find(filter) then
+			if text:find("ammo") or text:find("balas") or text:find("crate") or text:find("buy") or text:find("comprar") or text:find("gun") then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function buyAmmoInGunStore()
+	local character = getLocalCharacter()
+	if not character then
+		return
+	end
+
+	if not isNearGunStore(character) then
+		return
+	end
+
+	local filters = getAmmoNameFilters(gunAmmoType)
+	local found = false
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("ProximityPrompt") and obj.Parent then
+			local text = obj.Parent.Name:lower() .. " " .. (obj.ObjectText or ""):lower() .. " " .. (obj.ActionText or ""):lower()
+			if matchesAmmoBuyObject(text, filters) then
+				found = true
+				pcall(function()
+					obj:InputHoldBegin()
+					wait(0.15)
+					obj:InputHoldEnd()
+				end)
+				break
+			end
+		end
+
+		if obj:IsA("ClickDetector") and obj.Parent then
+			local text = obj.Parent.Name:lower() .. " " .. (obj.Name or ""):lower()
+			if matchesAmmoBuyObject(text, filters) then
+				found = true
+				pcall(function()
+					obj:FireClick(LocalPlayer)
+				end)
+				break
+			end
+		end
+	end
+
+	if not found then
+		-- no se encontro boton de compra de municion
+	end
+end
+
+local function applyAntiKill(character)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		if humanoid.Health > 0 and humanoid.Health < 20 then
+			humanoid.Health = humanoid.MaxHealth or 100
+		end
+		if humanoid.MaxHealth and humanoid.MaxHealth < 100 then
+			humanoid.MaxHealth = 100
+		end
+	end
+end
+
+local function applyAntiRagdoll(character)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		local state = humanoid:GetState()
+		if state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.FallingDown then
+			humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+		end
+	end
+end
+
+local function applyAntiLock(character)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		local state = humanoid:GetState()
+		if state == Enum.HumanoidStateType.Seated or state == Enum.HumanoidStateType.PlatformStanding or state == Enum.HumanoidStateType.GettingUp then
+			humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+		end
+	end
+end
+
+local function setCharacterVisibility(character, visible)
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Transparency = visible and 0 or 1
+			if part.Name ~= "HumanoidRootPart" then
+				part.CanCollide = visible
+			end
+		elseif part:IsA("Decal") or part:IsA("Texture") then
+			part.Transparency = visible and 0 or 1
+		end
+	end
+end
+
+local function restoreDisplayDistance(character)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.DisplayDistanceType then
+		humanoid.DisplayDistanceType = originalDisplayDistanceType
+	end
+end
+
+local function applyHideName(character)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.DisplayDistanceType then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
+end
+
+local function applyInfiniteStamina(character)
+	if not character then
+		return
+	end
+
+	local stamina = character:FindFirstChild("Stamina") or character:FindFirstChild("stamina")
+	if stamina and stamina:IsA("NumberValue") then
+		local maxVal = stamina:FindFirstChild("Max")
+		if maxVal and maxVal:IsA("NumberValue") then
+			stamina.Value = maxVal.Value
+		else
+			stamina.Value = 100
+		end
+	end
+end
+
+local function applyHighJump(character)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		if not originalJumpPower then
+			originalJumpPower = humanoid.JumpPower
+		end
+		humanoid.UseJumpPower = true
+		humanoid.JumpPower = 100
+	end
+end
+
+local function restoreHighJump(character)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid and originalJumpPower then
+		humanoid.UseJumpPower = true
+		humanoid.JumpPower = originalJumpPower
+	end
+end
+
+local function getClosestEnemy(maxDistance)
+	local localCharacter = getLocalCharacter()
+	if not localCharacter then
+		return nil
+	end
+
+	local bestTarget
+	local bestDistance = maxDistance or 15
+	local localRoot = localCharacter:FindFirstChild("HumanoidRootPart")
+	if not localRoot then
+		return nil
+	end
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character and isValidTarget(player.Character) and player.Name ~= safeFriend then
+			local targetRoot = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Head")
+			if targetRoot then
+				local distance = (localRoot.Position - targetRoot.Position).Magnitude
+				if distance <= bestDistance then
+					bestDistance = distance
+					bestTarget = player
+				end
+			end
+		end
+	end
+
+	return bestTarget
+end
+
+local function getCurrentTool(character)
+	for _, item in ipairs(character:GetChildren()) do
+		if item:IsA("Tool") then
+			return item
+		end
+	end
+	if LocalPlayer.Backpack then
+		return LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+	end
+	return nil
+end
+
+local function applyGunModsToTool(tool)
+	if not tool or not enableGunMods then
+		return
+	end
+
+	local function setValue(prop, value)
+		local child = tool:FindFirstChild(prop)
+		if child and child:IsA("NumberValue") then
+			child.Value = value
+		end
+		if tool[prop] ~= nil then
+			pcall(function()
+				tool[prop] = value
+			end)
+		end
+		if tool:GetAttribute(prop) ~= nil then
+			tool:SetAttribute(prop, value)
+		end
+	end
+
+	setValue("FireRate", weaponFireRate)
+	setValue("Accuracy", weaponAccuracy)
+	setValue("Recoil", weaponRecoil)
+	setValue("ReloadTime", weaponReloadTime)
+	setValue("Automatic", weaponAutomatic)
+end
+
+local function doAutoAttack()
+	local character = getLocalCharacter()
+	if not character or not autoAttackEnabled then
+		return
+	end
+	local targetPlayer = getClosestEnemy(50)
+	local tool = getCurrentTool(character)
+	if targetPlayer and tool then
+		local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.Health > 0 then
+			pcall(function()
+				tool:Activate()
+			end)
+		end
+	end
+end
+
+local function doMeleeAura()
+	local character = getLocalCharacter()
+	if not character or not meleeAuraEnabled then
+		return
+	end
+	local targetPlayer = getClosestEnemy(10)
+	local tool = getCurrentTool(character)
+	if targetPlayer and tool then
+		pcall(function()
+			tool:Activate()
+		end)
+	end
+end
+
+local function doBumpAura()
+	local character = getLocalCharacter()
+	if not character then
+		return
+	end
+
+	local root = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+	if not root then
+		return
+	end
+
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		if descendant:IsA("BasePart") and descendant.Parent and descendant.Parent ~= character and not descendant:IsDescendantOf(Players) then
+			local distance = (root.Position - descendant.Position).Magnitude
+			if distance <= 12 then
+				local bodyVelocity = Instance.new("BodyVelocity")
+				bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+				bodyVelocity.Velocity = (descendant.Position - root.Position).Unit * 80 + Vector3.new(0, 12, 0)
+				bodyVelocity.P = 1e4
+				bodyVelocity.Parent = descendant
+				game:GetService("Debris"):AddItem(bodyVelocity, 0.12)
+			end
+		end
+	end
+end
+
+local function doSnapUnderMap()
+	local character = getLocalCharacter()
+	if not character then
+		return
+	end
+	local root = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+	if root then
+		root.CFrame = root.CFrame - Vector3.new(0, snapDepth, 0)
+	end
+end
+
+
+local espObjects = {}
+local droppedItemObjects = {}
+
+local function clearDroppedItem(item)
+	local data = droppedItemObjects[item]
+	if data then
+		if data.Billboard then
+			data.Billboard:Destroy()
+		end
+		droppedItemObjects[item] = nil
+	end
+end
+
+local function getDroppedItemRoot(item)
+	if item:IsA("Tool") then
+		return item:FindFirstChild("Handle") or item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
+	end
+	return nil
+end
+
+local function createDroppedItemESP(item)
+	if droppedItemObjects[item] then
+		return droppedItemObjects[item]
+	end
+
+	local root = getDroppedItemRoot(item)
+	if not root then
+		return nil
+	end
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "DroppedItemESP"
+	billboard.Adornee = root
+	billboard.AlwaysOnTop = true
+	billboard.Size = UDim2.new(0, 160, 0, 32)
+	billboard.StudsOffset = Vector3.new(0, 2, 0)
+	billboard.Parent = root
+
+	local label = Instance.new("TextLabel")
+	label.Name = "DroppedItemLabel"
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.Position = UDim2.new(0, 0, 0, 0)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = Color3.new(1, 0.8, 0.2)
+	label.TextStrokeTransparency = 0.5
+	label.Font = Enum.Font.SourceSansBold
+	label.TextSize = 14
+	label.Text = item.Name
+	label.TextWrapped = true
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.Parent = billboard
+
+	local data = { Billboard = billboard, Label = label }
+	droppedItemObjects[item] = data
+	return data
+end
+
+local function getDroppedItemText(item)
+	local text = item.Name
+	local lower = text:lower()
+	if lower:find("legendary") then
+		return text .. " [Legendary]"
+	elseif lower:find("omega") then
+		return text .. " [Omega]"
+	elseif lower:find("epic") then
+		return text .. " [Epic]"
+	elseif lower:find("rare") then
+		return text .. " [Rare]"
+	elseif lower:find("money") or lower:find("dinero") then
+		return text .. " [Dinero]"
+	end
+	return text
+end
+
+local function updateDroppedItems()
+	if not droppedItemsEnabled then
+		for item, _ in pairs(droppedItemObjects) do
+			clearDroppedItem(item)
+		end
+		return
+	end
+
+	local seen = {}
+	for _, item in ipairs(workspace:GetDescendants()) do
+		if item:IsA("Tool") and item.Parent and not item.Parent:IsDescendantOf(Players) then
+			local data = createDroppedItemESP(item)
+			if data then
+				data.Label.Text = getDroppedItemText(item)
+				seen[item] = true
+			end
+		end
+	end
+
+	for item, _ in pairs(droppedItemObjects) do
+		if not seen[item] or not item.Parent then
+			clearDroppedItem(item)
+		end
+	end
+end
+
+local function clearESP(player)
+	local data = espObjects[player]
+	if data then
+		if data.Billboard then
+			data.Billboard:Destroy()
+		end
+		espObjects[player] = nil
+	end
+end
+
+local function createESPForPlayer(player)
+	if espObjects[player] then
+		return espObjects[player]
+	end
+
+	local character = player.Character
+	if not character then
+		return nil
+	end
+
+	local head = character:FindFirstChild("Head")
+	if not head then
+		return nil
+	end
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "MortyESP"
+	billboard.Adornee = head
+	billboard.AlwaysOnTop = true
+	billboard.Size = UDim2.new(0, 180, 0, 120)
+	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+	billboard.Parent = head
+
+	local box = Instance.new("Frame")
+	box.Name = "ESPBox"
+	box.Size = UDim2.new(1, 0, 0.9, 0)
+	box.Position = UDim2.new(0, 0, 0, 0)
+	box.BackgroundTransparency = 1
+	box.BorderSizePixel = 2
+	box.BorderColor3 = Color3.new(0, 1, 0)
+	box.Parent = billboard
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "ESPName"
+	nameLabel.Size = UDim2.new(1, -4, 0, 18)
+	nameLabel.Position = UDim2.new(0, 2, 0, 2)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.TextColor3 = Color3.new(1, 1, 1)
+	nameLabel.TextStrokeTransparency = 0.5
+	nameLabel.Font = Enum.Font.SourceSansBold
+	nameLabel.TextSize = 14
+	nameLabel.Text = ""
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.Parent = billboard
+
+	local healthLabel = Instance.new("TextLabel")
+	healthLabel.Name = "ESPHealth"
+	healthLabel.Size = UDim2.new(1, -4, 0, 18)
+	healthLabel.Position = UDim2.new(0, 2, 0, 22)
+	healthLabel.BackgroundTransparency = 1
+	healthLabel.TextColor3 = Color3.new(1, 0.2, 0.2)
+	healthLabel.TextStrokeTransparency = 0.5
+	healthLabel.Font = Enum.Font.SourceSans
+	healthLabel.TextSize = 13
+	healthLabel.Text = ""
+	healthLabel.TextXAlignment = Enum.TextXAlignment.Left
+	healthLabel.Parent = billboard
+
+	local distanceLabel = Instance.new("TextLabel")
+	distanceLabel.Name = "ESPDistance"
+	distanceLabel.Size = UDim2.new(1, -4, 0, 18)
+	distanceLabel.Position = UDim2.new(0, 2, 0, 42)
+	distanceLabel.BackgroundTransparency = 1
+	distanceLabel.TextColor3 = Color3.new(0.6, 0.8, 1)
+	distanceLabel.TextStrokeTransparency = 0.5
+	distanceLabel.Font = Enum.Font.SourceSans
+	distanceLabel.TextSize = 13
+	distanceLabel.Text = ""
+	distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+	distanceLabel.Parent = billboard
+
+	local hackLabel = Instance.new("TextLabel")
+	hackLabel.Name = "ESPHacker"
+	hackLabel.Size = UDim2.new(1, -4, 0, 18)
+	hackLabel.Position = UDim2.new(0, 2, 0, 62)
+	hackLabel.BackgroundTransparency = 1
+	hackLabel.TextColor3 = Color3.new(1, 0, 0)
+	hackLabel.TextStrokeTransparency = 0.5
+	hackLabel.Font = Enum.Font.SourceSansBold
+	hackLabel.TextSize = 12
+	hackLabel.Text = ""
+	hackLabel.TextXAlignment = Enum.TextXAlignment.Left
+	hackLabel.Parent = billboard
+
+	local inventoryLabel = Instance.new("TextLabel")
+	inventoryLabel.Name = "ESPInventory"
+	inventoryLabel.Size = UDim2.new(1, -4, 0, 36)
+	inventoryLabel.Position = UDim2.new(0, 2, 0, 82)
+	inventoryLabel.BackgroundTransparency = 1
+	inventoryLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+	inventoryLabel.TextStrokeTransparency = 0.5
+	inventoryLabel.Font = Enum.Font.SourceSans
+	inventoryLabel.TextSize = 12
+	inventoryLabel.Text = ""
+	inventoryLabel.TextWrapped = true
+	inventoryLabel.TextXAlignment = Enum.TextXAlignment.Left
+	inventoryLabel.TextYAlignment = Enum.TextYAlignment.Top
+	inventoryLabel.Parent = billboard
+
+	local data = {
+		Billboard = billboard,
+		Box = box,
+		NameLabel = nameLabel,
+		HealthLabel = healthLabel,
+		DistanceLabel = distanceLabel,
+		HackLabel = hackLabel,
+		InventoryLabel = inventoryLabel
+	}
+
+	espObjects[player] = data
+	return data
+end
+
+local function getInventoryText(player)
+	local inventoryNames = {}
+
+	if player.Backpack then
+		for _, item in ipairs(player.Backpack:GetChildren()) do
+			if item:IsA("Tool") then
+				table.insert(inventoryNames, item.Name)
+			end
+		end
+	end
+
+	if player.Character then
+		for _, item in ipairs(player.Character:GetChildren()) do
+			if item:IsA("Tool") then
+				table.insert(inventoryNames, item.Name)
+			end
+		end
+	end
+
+	return #inventoryNames > 0 and table.concat(inventoryNames, ", ") or "Ninguno"
+end
+
+local function updateESP(player)
+	local character = player.Character
+	if not character or not isValidTarget(character) then
+		clearESP(player)
+		return
+	end
+
+	local data = createESPForPlayer(player)
+	if not data then
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local health = humanoid and humanoid.Health or 0
+
+	data.Billboard.Enabled = espNameEnabled or espHealthEnabled or espDistanceEnabled or espBoxEnabled or espInventoryEnabled or hackerDetectionEnabled
+	data.Box.Visible = espBoxEnabled
+	data.NameLabel.Visible = espNameEnabled
+	data.HealthLabel.Visible = espHealthEnabled
+	data.DistanceLabel.Visible = espDistanceEnabled
+	data.HackLabel.Visible = hackerDetectionEnabled
+	data.InventoryLabel.Visible = espInventoryEnabled
+
+	if espNameEnabled then
+		data.NameLabel.Text = player.Name
+	end
+
+	if espHealthEnabled then
+		data.HealthLabel.Text = "Vida: " .. math.floor(health)
+	end
+
+	if espDistanceEnabled then
+		local distance = 0
+		if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
+			distance = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude)
+		end
+		data.DistanceLabel.Text = "Distancia: " .. distance
+	end
+
+	if hackerDetectionEnabled then
+		local suspicious = false
+		local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+		if humanoidRootPart then
+			local speed = humanoid.WalkSpeed or 0
+			local velocity = humanoidRootPart.Velocity.Magnitude
+			if speed > 60 or velocity > 120 then
+				suspicious = true
+			end
+		end
+		if suspicious then
+			data.HackLabel.Text = "Hacker Detected"
+		else
+			data.HackLabel.Text = ""
+		end
+	end
+
+	if espInventoryEnabled then
+		data.InventoryLabel.Text = "Inventario: " .. getInventoryText(player)
+	end
+end
+
+local function updateAllESP()
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			updateESP(player)
+		end
+	end
+end
+
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function()
+		updateESP(player)
+	end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	clearESP(player)
+end)
+
+RunService.RenderStepped:Connect(function()
+	local character = getLocalCharacter()
+	if character then
+		if highJumpEnabled then
+			applyHighJump(character)
+		else
+			restoreHighJump(character)
+		end
+
+		if infiniteStaminaEnabled then
+			applyInfiniteStamina(character)
+		end
+
+		if invisibleEnabled then
+			setCharacterVisibility(character, false)
+		else
+			setCharacterVisibility(character, true)
+		end
+
+		if hideNameEnabled then
+			applyHideName(character)
+		else
+			restoreDisplayDistance(character)
+		end
+
+		local tool = getCurrentTool(character)
+		applyGunModsToTool(tool)
+		if autoAttackEnabled then
+			doAutoAttack()
+		end
+		if meleeAuraEnabled then
+			doMeleeAura()
+		end
+		if bumpAuraEnabled then
+			doBumpAura()
+		end
+		if autoPickupEnabled then
+			doAutoPickup()
+		end
+		if autoMinigameEnabled then
+			doAutoMinigame()
+		end
+		if spectateEnabled then
+			spectatePlayer()
+		else
+			restoreCamera()
+		end
+		if antiKillEnabled then
+			applyAntiKill(character)
+		end
+		if antiRagdollEnabled then
+			applyAntiRagdoll(character)
+		end
+		if antiLockEnabled then
+			applyAntiLock(character)
+		end
+		if skipCrateSpinEnabled then
+			doSkipCrateSpin()
+		end
+		if fpsBoostEnabled then
+			applyFPSBoost()
+		end
+	end
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			updateESP(player)
+		end
+	end
+	updateDroppedItems()
+end)
+
+loadConfig()
+
+local function createMortyHubGui()
+	local playerGui = LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then
+		return
+	end
+
+	local existing = playerGui:FindFirstChild("MortyHubGui")
+	if existing then
+		existing:Destroy()
+	end
+
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "MortyHubGui"
+	screenGui.ResetOnSpawn = false
+	screenGui.DisplayOrder = 10
+	screenGui.Parent = playerGui
+
+	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
+	mainFrame.Size = UDim2.new(0, 380, 0, 420)
+	mainFrame.Position = UDim2.new(0.5, -190, 0.15, 0)
+	mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+	mainFrame.BorderSizePixel = 0
+	mainFrame.AnchorPoint = Vector2.new(0, 0)
+	mainFrame.Parent = screenGui
+
+	local topBar = Instance.new("Frame")
+	topBar.Name = "TopBar"
+	topBar.Size = UDim2.new(1, 0, 0, 40)
+	topBar.BackgroundColor3 = Color3.fromRGB(28, 28, 40)
+	topBar.BorderSizePixel = 0
+	topBar.Parent = mainFrame
+
+	local iconLabel = Instance.new("TextLabel")
+	iconLabel.Name = "IconLabel"
+	iconLabel.Size = UDim2.new(0, 34, 1, 0)
+	iconLabel.Position = UDim2.new(0, 8, 0, 0)
+	iconLabel.BackgroundTransparency = 1
+	iconLabel.Text = "≡"
+	iconLabel.Font = Enum.Font.SourceSansBold
+	iconLabel.TextSize = 22
+	iconLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	iconLabel.Parent = topBar
+
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Name = "TitleLabel"
+	titleLabel.Size = UDim2.new(1, -110, 1, 0)
+	titleLabel.Position = UDim2.new(0, 48, 0, 0)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text = "MORTY HUB | Block Spin"
+	titleLabel.Font = Enum.Font.SourceSansBold
+	titleLabel.TextSize = 18
+	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.Parent = topBar
+
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "CloseButton"
+	closeButton.Size = UDim2.new(0, 40, 1, 0)
+	closeButton.Position = UDim2.new(1, -46, 0, 0)
+	closeButton.BackgroundColor3 = Color3.fromRGB(190, 40, 40)
+	closeButton.BorderSizePixel = 0
+	closeButton.Text = "X"
+	closeButton.Font = Enum.Font.SourceSansBold
+	closeButton.TextSize = 18
+	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeButton.Parent = topBar
+
+	local content = Instance.new("ScrollingFrame")
+	content.Name = "Content"
+	content.Size = UDim2.new(1, 0, 1, -40)
+	content.Position = UDim2.new(0, 0, 0, 40)
+	content.BackgroundTransparency = 1
+	content.BorderSizePixel = 0
+	content.CanvasSize = UDim2.new(0, 0, 0, 0)
+	content.ScrollBarThickness = 8
+	content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	content.Parent = mainFrame
+
+	local uiLayout = Instance.new("UIListLayout")
+	uiLayout.Parent = content
+	uiLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	uiLayout.Padding = UDim.new(0, 8)
+
+	local function createSectionLabel(text)
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1, -24, 0, 28)
+		label.BackgroundTransparency = 1
+		label.Text = text
+		label.Font = Enum.Font.SourceSansSemibold
+		label.TextSize = 16
+		label.TextColor3 = Color3.fromRGB(220, 220, 220)
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Parent = content
+	end
+
+	local function createToggle(text, getterSetter)
+		local button = Instance.new("TextButton")
+		button.Size = UDim2.new(1, -24, 0, 34)
+		button.BackgroundColor3 = Color3.fromRGB(40, 40, 52)
+		button.BorderSizePixel = 0
+		button.Font = Enum.Font.SourceSans
+		button.TextSize = 16
+		button.TextColor3 = Color3.fromRGB(240, 240, 240)
+		button.Parent = content
+
+		local function refresh()
+			local state = getterSetter()
+			button.Text = text .. " [" .. (state and "ON" or "OFF") .. "]"
+			button.BackgroundColor3 = state and Color3.fromRGB(55, 135, 65) or Color3.fromRGB(40, 40, 52)
+		end
+
+		button.MouseButton1Click:Connect(function()
+			getterSetter(not getterSetter())
+			refresh()
+		end)
+
+		refresh()
+	end
+
+	local function createCycleButton(text, getterSetter, values)
+		local button = Instance.new("TextButton")
+		button.Size = UDim2.new(1, -24, 0, 34)
+		button.BackgroundColor3 = Color3.fromRGB(40, 40, 52)
+		button.BorderSizePixel = 0
+		button.Font = Enum.Font.SourceSans
+		button.TextSize = 16
+		button.TextColor3 = Color3.fromRGB(240, 240, 240)
+		button.Parent = content
+
+		local function refresh()
+			button.Text = text .. ": " .. getterSetter()
+		end
+
+		button.MouseButton1Click:Connect(function()
+			local current = getterSetter()
+			local nextIndex = 1
+			for i, value in ipairs(values) do
+				if value == current then
+					nextIndex = i + 1
+					break
+				end
+			end
+			if nextIndex > #values then
+				nextIndex = 1
+			end
+			getterSetter(values[nextIndex])
+			refresh()
+		end)
+
+		refresh()
+	end
+
+	local function createButton(text, callback)
+		local button = Instance.new("TextButton")
+		button.Size = UDim2.new(1, -24, 0, 34)
+		button.BackgroundColor3 = Color3.fromRGB(70, 70, 100)
+		button.BorderSizePixel = 0
+		button.Font = Enum.Font.SourceSans
+		button.TextSize = 16
+		button.TextColor3 = Color3.fromRGB(240, 240, 240)
+		button.Text = text
+		button.Parent = content
+		button.MouseButton1Click:Connect(callback)
+		return button
+	end
+
+	local function setSafeFriend(name)
+		safeFriend = name or "--"
+	end
+
+	createSectionLabel("MOVEMENT")
+	createToggle("High Jump", function(value)
+		if value ~= nil then highJumpEnabled = value end
+		return highJumpEnabled
+	end)
+	createToggle("Infinite Stamina", function(value)
+		if value ~= nil then infiniteStaminaEnabled = value end
+		return infiniteStaminaEnabled
+	end)
+	createToggle("Invisible", function(value)
+		if value ~= nil then invisibleEnabled = value end
+		return invisibleEnabled
+	end)
+	createToggle("Hide Name", function(value)
+		if value ~= nil then hideNameEnabled = value end
+		return hideNameEnabled
+	end)
+	createToggle("Snap Under Map", function(value)
+		if value ~= nil then enableSnapEnabled = value end
+		return enableSnapEnabled
+	end)
+	createCycleButton("Snap Depth", function(value)
+		if value ~= nil then snapDepth = value end
+		return snapDepth
+	end, {0, 10, 20, 30, 40, 50})
+
+	createSectionLabel("COMBAT")
+	createToggle("Auto Attack", function(value)
+		if value ~= nil then autoAttackEnabled = value end
+		return autoAttackEnabled
+	end)
+	createToggle("Melee Aura", function(value)
+		if value ~= nil then meleeAuraEnabled = value end
+		return meleeAuraEnabled
+	end)
+	createToggle("Bump Aura", function(value)
+		if value ~= nil then bumpAuraEnabled = value end
+		return bumpAuraEnabled
+	end)
+	createToggle("Anti Kill", function(value)
+		if value ~= nil then antiKillEnabled = value end
+		return antiKillEnabled
+	end)
+	createToggle("Anti Ragdoll", function(value)
+		if value ~= nil then antiRagdollEnabled = value end
+		return antiRagdollEnabled
+	end)
+	createToggle("Anti Lock", function(value)
+		if value ~= nil then antiLockEnabled = value end
+		return antiLockEnabled
+	end)
+
+	createSectionLabel("WEAPON")
+	createToggle("Enable Gun Mods", function(value)
+		if value ~= nil then enableGunMods = value end
+		return enableGunMods
+	end)
+	createCycleButton("Gun Ammo Type", function(value)
+		if value ~= nil then gunAmmoType = value end
+		return gunAmmoType
+	end, gunAmmoTypes)
+	createCycleButton("Fire Rate", function(value)
+		if value ~= nil then weaponFireRate = value end
+		return weaponFireRate
+	end, {10, 20, 26, 35, 45})
+
+	createSectionLabel("MISC")
+	createToggle("Auto Pickup", function(value)
+		if value ~= nil then autoPickupEnabled = value end
+		return autoPickupEnabled
+	end)
+	createToggle("Auto Minigame", function(value)
+		if value ~= nil then autoMinigameEnabled = value end
+		return autoMinigameEnabled
+	end)
+	createToggle("Skip Crate Spin", function(value)
+		if value ~= nil then skipCrateSpinEnabled = value end
+		return skipCrateSpinEnabled
+	end)
+	createToggle("FPS Boost", function(value)
+		if value ~= nil then fpsBoostEnabled = value end
+		return fpsBoostEnabled
+	end)
+
+	createSectionLabel("CONFIG")
+	createButton("Save Config", function()
+		saveConfig()
+	end)
+	createButton("Load Config", function()
+		loadConfig()
+	end)
+	createButton("Delete Config", function()
+		deleteConfig()
+	end)
+
+	closeButton.MouseButton1Click:Connect(function()
+		screenGui.Enabled = false
+	end)
+
+	local openerGui = Instance.new("ScreenGui")
+	openerGui.Name = "MortyHubOpener"
+	openerGui.ResetOnSpawn = false
+	openerGui.DisplayOrder = 11
+	openerGui.Parent = playerGui
+
+	local openGuiButton = Instance.new("TextButton")
+	openGuiButton.Name = "OpenMortyHub"
+	openGuiButton.Size = UDim2.new(0, 110, 0, 34)
+	openGuiButton.Position = UDim2.new(0, 12, 0, 12)
+	openGuiButton.AnchorPoint = Vector2.new(0, 0)
+	openGuiButton.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+	openGuiButton.BorderSizePixel = 0
+	openGuiButton.Text = "Morty Hub"
+	openGuiButton.Font = Enum.Font.SourceSansSemibold
+	openGuiButton.TextSize = 16
+	openGuiButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	openGuiButton.Parent = openerGui
+
+	openGuiButton.MouseButton1Click:Connect(function()
+		screenGui.Enabled = true
+	end)
+
+	screenGui:GetPropertyChangedSignal("Enabled"):Connect(function()
+		openerGui.Enabled = not screenGui.Enabled
+	end)
+
+	openerGui.Enabled = false
+end
+
+createMortyHubGui()
+
+-- Script cargado correctamente.
